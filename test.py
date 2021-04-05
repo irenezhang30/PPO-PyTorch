@@ -1,15 +1,18 @@
 import gym
+from envs.acrobot_simulator import AcrobotSimulator
+from envs.acrobot_simulator_po import AcrobotSimulator_po
 from PPO import PPO, Memory
 from PIL import Image
 import torch
 
 def test():
     ############## Hyperparameters ##############
-    env_name = "LunarLander-v2"
     # creating environment
-    env = gym.make(env_name)
+    env_name = "acrobot_fo"
+    env = AcrobotSimulator()
     state_dim = env.observation_space.shape[0]
-    action_dim = 4
+    action_dim = 3
+
     render = False
     max_timesteps = 500
     n_latent_var = 64           # number of variables in hidden layer
@@ -37,7 +40,7 @@ def test():
         ep_reward = 0
         state = env.reset()
         for t in range(max_timesteps):
-            action = ppo.policy_old.act(state, memory)
+            action = ppo.policy_old.act(state, memory, 0, 0)
             state, reward, done, _ = env.step(action)
             ep_reward += reward
             if render:

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="c5de7d4e-de2d-494e-9c12-cbbb8859d513" name="rlproject" url="http://v.vectorinstitute.ai">
+        <fileTransfer host="v.vectorinstitute.ai" port="22" rootFolder="/h/irene" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

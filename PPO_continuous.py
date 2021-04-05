@@ -13,7 +13,7 @@ class Memory:
         self.logprobs = []
         self.rewards = []
         self.is_terminals = []
-    
+
     def clear_memory(self):
         del self.actions[:]
         del self.states[:]
@@ -92,7 +92,7 @@ class PPO:
     
     def select_action(self, state, memory):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
-        return self.policy_old.act(state, memory).cpu().data.numpy().flatten()
+        return self.policy_old.act(state, memory, 0, 0).cpu().data.numpy().flatten()
     
     def update(self, memory):
         # Monte Carlo estimate of rewards:
@@ -116,7 +116,7 @@ class PPO:
         # Optimize policy for K epochs:
         for _ in range(self.K_epochs):
             # Evaluating old actions and values :
-            logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
+            logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions, -99)
             
             # Finding the ratio (pi_theta / pi_theta__old):
             ratios = torch.exp(logprobs - old_logprobs.detach())
