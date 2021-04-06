@@ -105,7 +105,12 @@ class AcrobotSimulator(core.Env):
     def reset(self):
         self.t = 0
         self.state = self.np_random.uniform(low=-0.1, high=0.1, size=(4,))
-        return self._get_ob()
+        return_state = self.np_random.uniform(low=-0.1, high=0.1, size=(4,))
+        return_state = np.append(return_state, 0)
+        return_state = np.append(return_state, 0)
+        return_state = np.append(return_state, 1)
+        # return self._get_ob()
+        return np.array(return_state)
 
     def step(self, a, dt=1):
         s = self.state
@@ -133,10 +138,12 @@ class AcrobotSimulator(core.Env):
         ns[2] = bound(ns[2], -self.MAX_VEL_1, self.MAX_VEL_1)
         ns[3] = bound(ns[3], -self.MAX_VEL_2, self.MAX_VEL_2)
         self.state = ns
+        return_state = [ns[0], ns[1], ns[2], ns[3], self.t, self.t+dt, a]
         self.t += dt
         reward = self.calc_reward()
         terminal = self.is_terminal()
-        return self._get_ob(), reward, terminal, {}
+        return np.array(return_state), reward, terminal, {"dt": dt}
+        # return self._get_ob(), reward, terminal, {}
 
     def _get_ob(self):
         return np.array(self.state)

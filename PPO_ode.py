@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-
+import wandb
 from envs.acrobot_simulator import AcrobotSimulator
 from envs.acrobot_simulator_po import AcrobotSimulator_po
 
@@ -13,17 +13,32 @@ import time
 import numpy as np
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+wandb.init(project="ppo-ode")
+config = wandb.config
 
 # Hyperparameters
 learning_rate = 0.0005
 gamma = 0.98
 lmbda = 0.95
-eps_clip = 0.1
-K_epoch = 2
-T_horizon = 20
-ode_method = "explicit_adams"
+eps_clip = 0.2
+K_epoch = 4
+T_horizon = 300
+ode_method = "euler"
 atol = rtol = 1e-8
+latent_dim = 32
+update_timestep = 1
 
+config.learning_rate = learning_rate
+config.gamma = gamma
+config.lmbda = lmbda
+config.eps_clip = eps_clip
+config.K_epoch = K_epoch
+config.T_horizon = T_horizon
+config.ode_method = ode_method
+config.atol = atol
+config.rtol = rtol
+config.latent_dim = latent_dim
+config.update_timestep = update_timestep
 
 class ODEFunc(nn.Module):
     def __init__(self, input_dim, ode_dim=20):
@@ -45,7 +60,7 @@ class ODEFunc(nn.Module):
         return x
 
 class PPO(nn.Module):
-    def __init__(self, action_dim=3, state_dim=4, latent_dim=32):
+    def __init__(self, action_dim=3, state_dim=4, latent_dim=64):
         super(PPO, self).__init__()
         self.data = []
         self.action_dim = action_dim
@@ -68,7 +83,7 @@ class PPO(nn.Module):
         input = torch.cat((hidden_tild[0].flatten(), hidden_tild[1].flatten(), act), dim=-1) # cell state, hidden_state
         hidden_prime = self.fc_xi(input)
         return hidden_prime
-    
+
     def shared(self, obs, hidden):
         if len(obs.shape) > 1:
             outs = []
@@ -100,15 +115,17 @@ class PPO(nn.Module):
                 z = torch.split(z.reshape(1, 1, -1), split_size_or_sections=32, dim=-1)
             else:
                 z = hidden
+            # print(obs.shape, 'obs shape')
+            # print(ob.shape, 'ob shape')
             ob = F.relu(self.fc1(ob))
             ob = ob.view(-1, 1, 64)
 
             outs, hidden = self.lstm(ob, z)
 
-        
+
         return outs, hidden
-        
-        
+
+
     def pi(self, obs, hidden):
         outs, hidden = self.shared(obs, hidden)
         outs = self.fc_pi(outs)
@@ -183,27 +200,35 @@ class PPO(nn.Module):
             loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(v_s, td_target.detach())
 
 
-            self.optimizer.zero_grad()
-            loss.mean().backward(retain_graph=True)
+            # self.optimizer.zero_grad()
+            loss_mean = loss.mean()
+            loss_mean.backward(retain_graph=True)
+            wandb.log({"Mean Loss": loss_mean})
+            # self.optimizer.step()
             self.optimizer.step()
+            self.optimizer.zero_grad()
 
 
 def main():
     exp_name = "lstmppo_acrobot_po_continuous"
     env = AcrobotSimulator_po()
-    model = PPO(action_dim=3, state_dim=2).to(device)
+    model = PPO(action_dim=3, state_dim=2, latent_dim=latent_dim).to(device)
+
+    wandb.watch(model)
 
     score = 0.0
     print_interval = 10
     results = []
-
+    timestep = 0
     for n_epi in range(10000):
         h_out = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
         s = env.reset()
         done = False
         t = 0
+        timestep
         while not done:
             for t in range(T_horizon):
+                timestep += 1
                 h_in = h_out
                 prob, h_out = model.pi(torch.from_numpy(s).float().to(device), h_in)
                 prob = prob.view(-1)
@@ -220,16 +245,20 @@ def main():
 
                 model.put_data((s, a, r / 100.0, s_prime, prob[a].item(), h_in, h_out, done))
                 s = s_prime
-
+                # wandb.log({'Rewards': r})
                 score += r
+                # print(r, 'r')
+                # if timestep % update_timestep == 0:
+
                 if done:
                     break
-
             model.train_net()
 
         if n_epi % 10 == 0 and n_epi != 0:
             print("# of episode :{}, avg score : {:.1f}".format(n_epi, score / print_interval))
             results.append([n_epi, score / print_interval])
+            wandb_score = score / print_interval
+            wandb.log({'Score': wandb_score})
             np.save(exp_name, np.array(results))
             score = 0.0
             print(torch.norm(h_out[0]))
