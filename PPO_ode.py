@@ -1,4 +1,3 @@
-# PPO-LSTM
 import gym
 import torch
 import torch.nn as nn
@@ -61,26 +60,64 @@ class PPO(nn.Module):
         self.ode_func = ODEFunc(latent_dim * 2, ode_dim=20)
 
 
-    def xi(self, hidden_tild, a):
-        a = torch.tensor(a).to(device)
-        a = F.one_hot(a, num_classes=self.action_dim)
-        input = torch.cat((hidden_tild[0].flatten(), hidden_tild[1].flatten(), a), dim=-1) # cell state, hidden_state
+    def xi(self, hidden_tild, act):
+#         import pdb; pdb.set_trace()
+        act = torch.tensor(act).to(device).long()
+
+        act = F.one_hot(act, num_classes=self.action_dim)
+        input = torch.cat((hidden_tild[0].flatten(), hidden_tild[1].flatten(), act), dim=-1) # cell state, hidden_state
         hidden_prime = self.fc_xi(input)
         return hidden_prime
+    
+    def shared(self, obs, hidden):
+        if len(obs.shape) > 1:
+            outs = []
+            for o in obs:
+                ts = o[...,-3:-1]
+                act = o[...,-1]
+                ob = o[...,:-3]
+                if ts.sum():
+                    z_prime = self.xi(hidden, act)
+                    z = odeint(self.ode_func, z_prime, ts, rtol=rtol, atol=atol, method=ode_method)[-1]
+                    z = torch.split(z.reshape(1, 1, -1), split_size_or_sections=32, dim=-1)
+                else:
+                    z = hidden
 
+                ob = F.relu(self.fc1(ob))
+                ob = ob.view(-1, 1, 64)
+
+                out, hidden = self.lstm(ob, z)
+                outs.append(out)
+            outs = torch.stack(outs).squeeze(1)
+
+        else:
+            ts = obs[...,-3:-1]
+            act = obs[...,-1]
+            ob = obs[...,:-3]
+            if ts.sum():
+                z_prime = self.xi(hidden, act)
+                z = odeint(self.ode_func, z_prime, ts, rtol=rtol, atol=atol, method=ode_method)[-1]
+                z = torch.split(z.reshape(1, 1, -1), split_size_or_sections=32, dim=-1)
+            else:
+                z = hidden
+            ob = F.relu(self.fc1(ob))
+            ob = ob.view(-1, 1, 64)
+
+            outs, hidden = self.lstm(ob, z)
+
+        
+        return outs, hidden
+        
+        
     def pi(self, obs, hidden):
-        obs = F.relu(self.fc1(obs))
-        obs = obs.view(-1, 1, 64)
-        obs, hidden_tild = self.lstm(obs, hidden)
-        obs = self.fc_pi(obs)
-        prob = F.softmax(obs, dim=2)
-        return prob, hidden_tild
+        outs, hidden = self.shared(obs, hidden)
+        outs = self.fc_pi(outs)
+        prob = F.softmax(outs, dim=2)
+        return prob, hidden
 
     def v(self, obs, hidden):
-        obs = F.relu(self.fc1(obs))
-        obs = obs.view(-1, 1, 64)
-        obs, lstm_hidden = self.lstm(obs, hidden)
-        v = self.fc_v(obs)
+        outs, _ = self.shared(obs, hidden)
+        v = self.fc_v(outs)
         return v
 
     def put_data(self, transition):
@@ -136,6 +173,7 @@ class PPO(nn.Module):
             advantage = torch.tensor(advantage_lst, dtype=torch.float).to(device)
 
             pi, _ = self.pi(s, first_hidden)
+
             pi_a = pi.squeeze(1).gather(1, a)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == log(exp(a)-exp(b))
 
@@ -152,7 +190,7 @@ class PPO(nn.Module):
 
 def main():
     exp_name = "lstmppo_acrobot_po_continuous"
-    env = AcrobotSimulator_po(continuous_time=True)
+    env = AcrobotSimulator_po()
     model = PPO(action_dim=3, state_dim=2).to(device)
 
     score = 0.0
@@ -160,26 +198,27 @@ def main():
     results = []
 
     for n_epi in range(10000):
-        z = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
+        h_out = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
         s = env.reset()
         done = False
         t = 0
         while not done:
             for t in range(T_horizon):
-                h_in = z
-                prob, z_tild = model.pi(torch.from_numpy(s).float().to(device), h_in)
+                h_in = h_out
+                prob, h_out = model.pi(torch.from_numpy(s).float().to(device), h_in)
                 prob = prob.view(-1)
                 m = Categorical(prob)
                 a = m.sample().item()
                 s_prime, r, done, info = env.step(a)
-                prev_t = t
-                t = prev_t + info["dt"]
-                z_prime = model.xi(z_tild, a)
-                time = torch.FloatTensor([prev_t, t]).to(device)
-                z = odeint(model.ode_func, z_prime, time, rtol=rtol, atol=atol, method=ode_method)[-1]
-                z = torch.split(z.reshape(1, 1, -1), split_size_or_sections=32, dim=-1)
-                # import pdb;pdb.set_trace()
-                model.put_data((s, a, r / 100.0, s_prime, prob[a].item(), h_in, z_tild, done))
+#                 prev_t = t
+#                 t = prev_t + info["dt"]
+#                 z_prime = model.xi(z_tild, a)
+#                 time = torch.FloatTensor([prev_t, t]).to(device)
+#                 z = odeint(model.ode_func, z_prime, time, rtol=rtol, atol=atol, method=ode_method)[-1]
+#                 z = torch.split(z.reshape(1, 1, -1), split_size_or_sections=32, dim=-1)
+
+
+                model.put_data((s, a, r / 100.0, s_prime, prob[a].item(), h_in, h_out, done))
                 s = s_prime
 
                 score += r
@@ -193,10 +232,11 @@ def main():
             results.append([n_epi, score / print_interval])
             np.save(exp_name, np.array(results))
             score = 0.0
+            print(torch.norm(h_out[0]))
+
 
 
     env.close()
-
 
 if __name__ == '__main__':
     main()

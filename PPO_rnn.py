@@ -118,8 +118,8 @@ class PPO(nn.Module):
 
 def main():
     exp_name = "lstmppo_acrobot_fo_discrete"
-    env = AcrobotSimulator()
-    model = PPO(action_dim=3, state_dim=4).to(device)
+    env = AcrobotSimulator_po()
+    model = PPO(action_dim=3, state_dim=5).to(device)
 
     # exp_name = "lstmppo_acrobot_po_discrete"
     # env = AcrobotSimulator_po(continuous_time=False)

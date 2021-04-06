@@ -80,20 +80,23 @@ class AcrobotSimulator_po(core.Env):
     action_arrow = None
     domain_fig = None
     num_actions = 3
-    num_states = 4
+    num_states = 2
 
-    def __init__(self, continuous_time=True, partially_observable=True):
+    def __init__(self):
         self.viewer = None
         # high = np.array([1.0, 1.0, 1.0, 1.0, self.MAX_VEL_1, self.MAX_VEL_2])
-        high = np.array([1.0, 1.0, self.MAX_VEL_1, self.MAX_VEL_2]) # added
-        low = -high
+        # high = np.array([1.0, self.MAX_VEL_1]) # mask the tip
+        # low = -high
+
+        high = np.array([1.0, self.MAX_VEL_1, 512, 512, 2]) # ACTION IS NOT ONE HOT
+        low = np.array([-1.0, -self.MAX_VEL_1, 0, 0, 0]) # STATE VALS, T, T+dt, LAST A
+
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
         self.action_space = spaces.Discrete(3)
         self.state = None
+        self.po_state = None
         self.seed()
         self.t = 0
-        self.continuous_time = continuous_time
-        self.partially_observable = partially_observable
 
     def __repr__(self):
         return "Acrobot_Simulator"
@@ -105,14 +108,17 @@ class AcrobotSimulator_po(core.Env):
     def reset(self):
         self.t = 0
         self.state = self.np_random.uniform(low=-0.1, high=0.1, size=(4,))
+        self.po_state = self.np_random.uniform(low=-0.1, high=0.1, size=(2,)) # added
+        self.po_state = np.append(self.po_state, 0)
+        self.po_state = np.append(self.po_state, 0)
+        self.po_state = np.append(self.po_state, 1)
         return self._get_ob()
 
-    def step(self, a):
-        if self.continuous_time:
-            dt = self.get_time_gap(action=a)
-        else:
-            dt = 1
+    def step(self, a, dt=1):
+        dt = self.get_time_gap(action=a) # added
         s = self.state
+#         if len(a) == 1:
+#             a = a[0]
         torque = self.AVAIL_TORQUE[a]
 
         # Add noise to the force action
@@ -136,16 +142,18 @@ class AcrobotSimulator_po(core.Env):
         ns[1] = wrap(ns[1], -pi, pi)
         ns[2] = bound(ns[2], -self.MAX_VEL_1, self.MAX_VEL_1)
         ns[3] = bound(ns[3], -self.MAX_VEL_2, self.MAX_VEL_2)
+
         self.state = ns
+        # self.po_state = np.array(ns[0], ns[2]) # added: mask the tip
+        self.po_state = np.array([ns[0], ns[2], self.t, self.t+dt, a]) # added: mask the tip
         self.t += dt
         reward = self.calc_reward()
         terminal = self.is_terminal()
         return self._get_ob(), reward, terminal, {"dt": dt}
 
     def _get_ob(self):
-        if self.partially_observable:
-            return np.array([self.state[0], self.state[2]])
-        else: return self.state
+        # self.po_state = np.concatenate((self.po_state, infos["dt"]), axis=1)
+        return np.array(self.po_state)
 
     def _terminal(self, state=None):
         if state is None:
@@ -167,7 +175,7 @@ class AcrobotSimulator_po(core.Env):
         return -cos(state[0]) - cos(state[1] + state[0])
 
     def get_time_gap(self, action=0, state=None):
-        return self.np_random.randint(1, 4)
+        return self.np_random.randint(1, 6)
 
     def get_time_info(self):
         return 1, 5, 500, False  # min_t, max_t, max time length, is continuous
