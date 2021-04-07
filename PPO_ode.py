@@ -24,9 +24,10 @@ eps_clip = 0.2
 K_epoch = 4
 T_horizon = 300
 ode_method = "euler"
-atol = rtol = 1e-8
+atol = rtol = 1e-2
 latent_dim = 32
 update_timestep = 1
+alpha=0.05
 
 config.learning_rate = learning_rate
 config.gamma = gamma
@@ -39,6 +40,7 @@ config.atol = atol
 config.rtol = rtol
 config.latent_dim = latent_dim
 config.update_timestep = update_timestep
+config.alpha = alpha
 
 class ODEFunc(nn.Module):
     def __init__(self, input_dim, ode_dim=20):
@@ -98,7 +100,7 @@ class PPO(nn.Module):
                 else:
                     z = hidden
 
-                ob = F.relu(self.fc1(ob))
+                ob = self.fc1(ob)
                 ob = ob.view(-1, 1, 64)
 
                 out, hidden = self.lstm(ob, z)
@@ -117,7 +119,7 @@ class PPO(nn.Module):
                 z = hidden
             # print(obs.shape, 'obs shape')
             # print(ob.shape, 'ob shape')
-            ob = F.relu(self.fc1(ob))
+            ob = self.fc1(ob)
             ob = ob.view(-1, 1, 64)
 
             outs, hidden = self.lstm(ob, z)
@@ -176,8 +178,12 @@ class PPO(nn.Module):
 
         for i in range(K_epoch):
             v_prime = self.v(s_prime, second_hidden).squeeze(1)
-            td_target = r + gamma * v_prime * done_mask
+            pi, _ = self.pi(s, first_hidden)
+            m = Categorical(pi)
+            entropy = m.entropy()
+            td_target = r + gamma * v_prime * done_mask #+ alpha * entropy
             v_s = self.v(s, first_hidden).squeeze(1)
+
             delta = td_target - v_s
             delta = delta.detach().cpu().numpy()
 
@@ -189,7 +195,7 @@ class PPO(nn.Module):
             advantage_lst.reverse()
             advantage = torch.tensor(advantage_lst, dtype=torch.float).to(device)
 
-            pi, _ = self.pi(s, first_hidden)
+
 
             pi_a = pi.squeeze(1).gather(1, a)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == log(exp(a)-exp(b))
@@ -212,7 +218,7 @@ class PPO(nn.Module):
 def main():
     exp_name = "lstmppo_acrobot_po_continuous"
     env = AcrobotSimulator_po()
-    model = PPO(action_dim=3, state_dim=2, latent_dim=latent_dim).to(device)
+    model = PPO(action_dim=3, state_dim=3, latent_dim=latent_dim).to(device)
 
     wandb.watch(model)
 

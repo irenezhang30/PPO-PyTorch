@@ -130,7 +130,7 @@ class PPO(nn.Module):
 def main():
     exp_name = "lstmppo_acrobot_fo_discrete"
     env = AcrobotSimulator_po()
-    model = PPO(action_dim=3, state_dim=5).to(device)
+    model = PPO(action_dim=3, state_dim=6).to(device)
 
     wandb.watch(model)
     # exp_name = "lstmppo_acrobot_po_discrete"
