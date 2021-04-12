@@ -108,8 +108,8 @@ class AcrobotSimulator_po(core.Env):
     def reset(self):
         self.t = 0
         self.state = self.np_random.uniform(low=-0.1, high=0.1, size=(4,))
-        # self.po_state = self.np_random.uniform(low=-0.1, high=0.1, size=(2,)) # added
-        self.po_state = self.np_random.uniform(low=-0.1, high=0.1, size=(3,))
+        self.po_state = self.np_random.uniform(low=-0.1, high=0.1, size=(3,)) # added
+        # self.po_state = self.np_random.uniform(low=-0.1, high=0.1, size=(3,))
         self.po_state = np.append(self.po_state, 0)
         self.po_state = np.append(self.po_state, 0)
         self.po_state = np.append(self.po_state, 1)
@@ -145,7 +145,7 @@ class AcrobotSimulator_po(core.Env):
         ns[3] = bound(ns[3], -self.MAX_VEL_2, self.MAX_VEL_2)
 
         self.state = ns
-        # self.po_state = np.array(ns[0], ns[2]) # added: mask the tip
+        # self.po_state = np.array([ns[0], ns[2], ns[1]]) # added: mask the tip
         # self.po_state = np.array([ns[0], ns[2], self.t, self.t+dt, a])
         self.po_state = np.array([ns[0], ns[2], ns[1], self.t, self.t+dt, a]) # added: mask the tip
         self.t += dt
