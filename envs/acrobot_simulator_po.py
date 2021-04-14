@@ -105,6 +105,7 @@ class AcrobotSimulator_po(core.Env):
         return [seed]
 
     def reset(self):
+        self.n = 0
         self.t = 0
         self.state = self.np_random.uniform(low=-0.1, high=0.1, size=(4,))
 
@@ -146,6 +147,7 @@ class AcrobotSimulator_po(core.Env):
         ns[3] = bound(ns[3], -self.MAX_VEL_2, self.MAX_VEL_2)
         self.state = ns
         self.t += dt
+        self.n += 1
         reward = self.calc_reward()
         terminal = self.is_terminal()
         return self._get_ob(dt=dt, action=a), reward, terminal, {}
@@ -169,7 +171,7 @@ class AcrobotSimulator_po(core.Env):
         return bool(-cos(state[0]) - cos(state[1] + state[0]) > 1.)
 
     def is_terminal(self, state=None):
-        return self.t >= 100 or self._terminal(state=state)
+        return self.n >= 500 or self._terminal(state=state)
 
     def calc_reward(self, action=0, state=None, dt=1):
         if state is None:
@@ -180,7 +182,7 @@ class AcrobotSimulator_po(core.Env):
         return -cos(state[0]) - cos(state[1] + state[0])
 
     def get_time_gap(self, action=0, state=None):
-        return self.np_random.uniform(0.25, 1.75)
+        return self.np_random.uniform(0.25, 4.0)
 
     def get_time_info(self):
         return 1, 5, 500, False  # min_t, max_t, max time length, is continuous

@@ -131,19 +131,19 @@ class PPO(nn.Module):
 
 
 def main():
-    # exp_name = "lstmppo_acrobot_fo_discrete"
-    # env = AcrobotSimulator_po(continuous_time=False, include_extra=False)
-    # model = PPO(action_dim=3, state_dim=2).to(device)
+    exp_name = "final_lstmppo_acrobot_po_continuous"
+    env = AcrobotSimulator_po(continuous_time=True, include_extra=False)
+    model = PPO(action_dim=3, state_dim=2).to(device)
 
 #     wandb.watch(model)
-    exp_name = "lstmppo_acrobot_fo_discrete"
-    env = AcrobotSimulator_po(continuous_time=False, include_extra=True)
-    model = PPO(action_dim=3, state_dim=5).to(device)
+    # exp_name = "temp_lstmppo_acrobot_po_continuous_withtime"
+    # env = AcrobotSimulator_po(continuous_time=True, include_extra=True)
+    # model = PPO(action_dim=3, state_dim=5).to(device)
 
     score = 0.0
     print_interval = 10
     results = []
-    for n_epi in range(10000):
+    for n_epi in range(1000):
         h_out = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
         s = env.reset()
         done = False

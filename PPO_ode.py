@@ -230,7 +230,7 @@ def main():
     print_interval = 10
     results = []
     timestep = 0
-    for n_epi in range(10000):
+    for n_epi in range(1000):
         h_out = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
         s = env.reset()
         done = False
