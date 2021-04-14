@@ -21,7 +21,7 @@ learning_rate = 0.0005
 gamma = 0.98
 lmbda = 0.95
 eps_clip = 0.2
-K_epoch = 4
+K_epoch = 2
 T_horizon = 300
 ode_method = "euler"
 atol = rtol = 1e-2
