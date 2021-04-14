@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+# import wandb
 
 from envs.acrobot_simulator import AcrobotSimulator
 from envs.acrobot_simulator_po import AcrobotSimulator_po
@@ -13,14 +14,26 @@ import time
 import numpy as np
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# wandb.init(project="ppo-ode")
+# config = wandb.config
+
 # Hyperparameters
 learning_rate = 0.0005
 gamma = 0.98
 lmbda = 0.95
-eps_clip = 0.1
+eps_clip = 0.2
 K_epoch = 2
 T_horizon = 20
 
+# K_epoch = 4
+# T_horizon = 300
+
+# config.learning_rate = learning_rate
+# config.gamma = gamma
+# config.lmbda = lmbda
+# config.eps_clip = eps_clip
+# config.K_epoch = K_epoch
+# config.T_horizon = T_horizon
 
 class PPO(nn.Module):
     def __init__(self, action_dim=3, state_dim=4):
@@ -34,7 +47,6 @@ class PPO(nn.Module):
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
     def pi(self, x, hidden):
-        import pdb; pdb.set_trace()
         x = F.relu(self.fc1(x))
         x = x.view(-1, 1, 64)
         x, lstm_hidden = self.lstm(x, hidden)
@@ -112,26 +124,21 @@ class PPO(nn.Module):
 
 
             self.optimizer.zero_grad()
-            loss.mean().backward(retain_graph=True)
+            loss_mean = loss.mean()
+            loss_mean.backward(retain_graph=True)
+#             wandb.log({"Mean Loss": loss_mean})
             self.optimizer.step()
 
 
 def main():
+    # exp_name = "lstmppo_acrobot_fo_discrete"
+    # env = AcrobotSimulator_po(continuous_time=False, include_extra=False)
+    # model = PPO(action_dim=3, state_dim=2).to(device)
+
+#     wandb.watch(model)
     exp_name = "lstmppo_acrobot_fo_discrete"
-    env = AcrobotSimulator()
-    model = PPO(action_dim=3, state_dim=4).to(device)
-
-    # exp_name = "lstmppo_acrobot_po_discrete"
-    # env = AcrobotSimulator_po(continuous_time=False)
-    # model = PPO(action_dim=3, state_dim=2).to(device)
-
-    # exp_name = "lstmppo_acrobot_po_continuous"
-    # env = AcrobotSimulator_po(continuous_time=True)
-    # model = PPO(action_dim=3, state_dim=2).to(device)
-
-    # exp_name = "lstmppo_acrobot_fo_continuous"
-    # env = AcrobotSimulator_po(continuous_time=True, partially_observable=False)
-    # model = PPO(action_dim=3, state_dim=4).to(device)
+    env = AcrobotSimulator_po(continuous_time=False, include_extra=True)
+    model = PPO(action_dim=3, state_dim=5).to(device)
 
     score = 0.0
     print_interval = 10
@@ -154,19 +161,22 @@ def main():
                 s = s_prime
 
                 score += r
+                # wandb.log({'Rewards': r})
                 if done:
                     break
 
             model.train_net()
-
+        print("WAT")
         if n_epi % print_interval == 0 and n_epi != 0:
             print("# of episode :{}, avg score : {:.1f}".format(n_epi, score / print_interval))
             results.append([n_epi, score / print_interval])
+#             score_wandb = score / print_interval
+#             wandb.log({'Score': score_wandb})
             np.save(exp_name, np.array(results))
             score = 0.0
 
     env.close()
 
-
 if __name__ == '__main__':
     main()
+

@@ -82,7 +82,7 @@ class AcrobotSimulator_po(core.Env):
     num_actions = 3
     num_states = 4
 
-    def __init__(self, continuous_time=True, partially_observable=True):
+    def __init__(self, continuous_time=True, partially_observable=True, include_extra=True):
         self.viewer = None
         # high = np.array([1.0, 1.0, 1.0, 1.0, self.MAX_VEL_1, self.MAX_VEL_2])
         high = np.array([1.0, 1.0, self.MAX_VEL_1, self.MAX_VEL_2]) # added
@@ -94,6 +94,8 @@ class AcrobotSimulator_po(core.Env):
         self.t = 0
         self.continuous_time = continuous_time
         self.partially_observable = partially_observable
+        self.include_extra = include_extra
+        
 
     def __repr__(self):
         return "Acrobot_Simulator"
@@ -105,13 +107,18 @@ class AcrobotSimulator_po(core.Env):
     def reset(self):
         self.t = 0
         self.state = self.np_random.uniform(low=-0.1, high=0.1, size=(4,))
-        return self._get_ob()
+
+        if self.partially_observable:
+            self.state[1] = 0.0
+            self.state[3] = 0.0
+        
+        return self._get_ob(dt=0, action=1)
 
     def step(self, a):
         if self.continuous_time:
-            dt = self.get_time_gap(action=a)
+            dt = self.get_time_gap(action=a) * self.dt
         else:
-            dt = 1
+            dt = 1 * self.dt
         s = self.state
         torque = self.AVAIL_TORQUE[a]
 
@@ -123,7 +130,8 @@ class AcrobotSimulator_po(core.Env):
         # _dsdt
         s_augmented = np.append(s, torque)
 
-        ns = rk4(self._dsdt, s_augmented, [0, dt * self.dt])
+        ns = rk4(self._dsdt, s_augmented, [0, dt])
+
         # only care about final timestep of integration returned by integrator
         ns = ns[-1]
         ns = ns[:4]  # omit action
@@ -140,12 +148,17 @@ class AcrobotSimulator_po(core.Env):
         self.t += dt
         reward = self.calc_reward()
         terminal = self.is_terminal()
-        return self._get_ob(), reward, terminal, {"dt": dt}
+        return self._get_ob(dt=dt, action=a), reward, terminal, {}
 
-    def _get_ob(self):
+    def _get_ob(self, dt=0, action=1):
         if self.partially_observable:
-            return np.array([self.state[0], self.state[2]])
-        else: return self.state
+            state = np.array([self.state[0], self.state[2]])
+        else: 
+            state = self.state
+        if self.include_extra:
+            state = np.append(state, [self.t-dt, self.t, action])
+        return state
+            
 
     def _terminal(self, state=None):
         if state is None:
@@ -156,7 +169,7 @@ class AcrobotSimulator_po(core.Env):
         return bool(-cos(state[0]) - cos(state[1] + state[0]) > 1.)
 
     def is_terminal(self, state=None):
-        return self.t >= 500 or self._terminal(state=state)
+        return self.t >= 100 or self._terminal(state=state)
 
     def calc_reward(self, action=0, state=None, dt=1):
         if state is None:
@@ -167,7 +180,7 @@ class AcrobotSimulator_po(core.Env):
         return -cos(state[0]) - cos(state[1] + state[0])
 
     def get_time_gap(self, action=0, state=None):
-        return self.np_random.randint(1, 4)
+        return self.np_random.uniform(0.25, 1.75)
 
     def get_time_info(self):
         return 1, 5, 500, False  # min_t, max_t, max time length, is continuous
