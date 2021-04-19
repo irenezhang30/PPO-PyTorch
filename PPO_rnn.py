@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-# import wandb
+import wandb
 
 from envs.acrobot_simulator import AcrobotSimulator
 from envs.acrobot_simulator_po import AcrobotSimulator_po
@@ -14,8 +14,8 @@ import time
 import numpy as np
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# wandb.init(project="ppo-ode")
-# config = wandb.config
+wandb.init(project="ppo-ode", group='rnn')
+config = wandb.config
 
 # Hyperparameters
 learning_rate = 0.0005
@@ -24,16 +24,19 @@ lmbda = 0.95
 eps_clip = 0.2
 K_epoch = 2
 T_horizon = 20
-
+lower_bound = 0.5
+upper_bound = 4.0
 # K_epoch = 4
 # T_horizon = 300
 
-# config.learning_rate = learning_rate
-# config.gamma = gamma
-# config.lmbda = lmbda
-# config.eps_clip = eps_clip
+config.learning_rate = learning_rate
+config.gamma = gamma
+config.lmbda = lmbda
+config.eps_clip = eps_clip
 # config.K_epoch = K_epoch
 # config.T_horizon = T_horizon
+config.lower_bound = lower_bound
+config.upper_bound = upper_bound
 
 class PPO(nn.Module):
     def __init__(self, action_dim=3, state_dim=4):
@@ -126,16 +129,16 @@ class PPO(nn.Module):
             self.optimizer.zero_grad()
             loss_mean = loss.mean()
             loss_mean.backward(retain_graph=True)
-#             wandb.log({"Mean Loss": loss_mean})
+            # wandb.log({"Mean Loss": loss_mean})
             self.optimizer.step()
 
 
 def main():
     exp_name = "final_lstmppo_acrobot_po_continuous"
-    env = AcrobotSimulator_po(continuous_time=True, include_extra=False)
+    env = AcrobotSimulator_po(continuous_time=True, include_extra=False, lower_bound=lower_bound, upper_bound=upper_bound)
     model = PPO(action_dim=3, state_dim=2).to(device)
 
-#     wandb.watch(model)
+    wandb.watch(model)
     # exp_name = "temp_lstmppo_acrobot_po_continuous_withtime"
     # env = AcrobotSimulator_po(continuous_time=True, include_extra=True)
     # model = PPO(action_dim=3, state_dim=5).to(device)
@@ -144,6 +147,7 @@ def main():
     print_interval = 10
     results = []
     for n_epi in range(1000):
+        wandb.log({'Episode': n_epi})
         h_out = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
         s = env.reset()
         done = False
@@ -170,8 +174,8 @@ def main():
         if n_epi % print_interval == 0 and n_epi != 0:
             print("# of episode :{}, avg score : {:.1f}".format(n_epi, score / print_interval))
             results.append([n_epi, score / print_interval])
-#             score_wandb = score / print_interval
-#             wandb.log({'Score': score_wandb})
+            score_wandb = score / print_interval
+            wandb.log({'Score': score_wandb})
             np.save(exp_name, np.array(results))
             score = 0.0
 

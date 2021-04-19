@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-# import wandb
+import wandb
 from envs.acrobot_simulator import AcrobotSimulator
 from envs.acrobot_simulator_po import AcrobotSimulator_po
 
@@ -13,8 +13,8 @@ import time
 import numpy as np
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# wandb.init(project="ppo-ode")
-# config = wandb.config
+wandb.init(project="ppo-ode", group='ode')
+config = wandb.config
 
 # Hyperparameters
 learning_rate = 0.0005
@@ -25,6 +25,9 @@ eps_clip = 0.2
 # T_horizon = 300
 K_epoch = 2
 T_horizon = 20
+lower_bound = 0.5
+upper_bound = 4.0
+
 
 
 ode_method = "euler"
@@ -33,18 +36,20 @@ latent_dim = 32
 update_timestep = 1
 alpha=0.05
 
-# config.learning_rate = learning_rate
-# config.gamma = gamma
-# config.lmbda = lmbda
-# config.eps_clip = eps_clip
+config.learning_rate = learning_rate
+config.gamma = gamma
+config.lmbda = lmbda
+config.eps_clip = eps_clip
 # config.K_epoch = K_epoch
 # config.T_horizon = T_horizon
-# config.ode_method = ode_method
-# config.atol = atol
-# config.rtol = rtol
-# config.latent_dim = latent_dim
-# config.update_timestep = update_timestep
-# config.alpha = alpha
+config.ode_method = ode_method
+config.atol = atol
+config.rtol = rtol
+config.latent_dim = latent_dim
+config.update_timestep = update_timestep
+config.alpha = alpha
+config.lower_bound = lower_bound
+config.upper_bound = upper_bound
 
 class ODEFunc(nn.Module):
     def __init__(self, input_dim, ode_dim=20):
@@ -213,7 +218,7 @@ class PPO(nn.Module):
             # self.optimizer.zero_grad()
             loss_mean = loss.mean()
             loss_mean.backward(retain_graph=True)
-#             wandb.log({"Mean Loss": loss_mean})
+            # wandb.log({"Mean Loss": loss_mean})
             # self.optimizer.step()
             self.optimizer.step()
             self.optimizer.zero_grad()
@@ -221,16 +226,17 @@ class PPO(nn.Module):
 
 def main():
     exp_name = "lstmppo_acrobot_po_continuous"
-    env = AcrobotSimulator_po()
+    env = AcrobotSimulator_po(lower_bound=lower_bound, upper_bound=upper_bound)
     model = PPO(action_dim=3, state_dim=2, latent_dim=latent_dim).to(device)
 
-#     wandb.watch(model)
+    wandb.watch(model)
 
     score = 0.0
     print_interval = 10
     results = []
     timestep = 0
     for n_epi in range(1000):
+        wandb.log({'Episode': n_epi})
         h_out = (torch.zeros([1, 1, 32], dtype=torch.float).to(device), torch.zeros([1, 1, 32], dtype=torch.float).to(device))
         s = env.reset()
         done = False
@@ -264,12 +270,12 @@ def main():
                 if done:
                     break
             model.train_net()
-        print("WAT")
+        # print("WAT")
         if n_epi % 10 == 0 and n_epi != 0:
             print("# of episode :{}, avg score : {:.1f}".format(n_epi, score / print_interval))
             results.append([n_epi, score / print_interval])
-#             wandb_score = score / print_interval
-#             wandb.log({'Score': wandb_score})
+            wandb_score = score / print_interval
+            wandb.log({'Score': wandb_score})
             np.save(exp_name, np.array(results))
             score = 0.0
             print(torch.norm(h_out[0]))

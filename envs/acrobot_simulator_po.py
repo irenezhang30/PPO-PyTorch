@@ -82,7 +82,7 @@ class AcrobotSimulator_po(core.Env):
     num_actions = 3
     num_states = 4
 
-    def __init__(self, continuous_time=True, partially_observable=True, include_extra=True):
+    def __init__(self, continuous_time=True, partially_observable=True, include_extra=True, lower_bound=0.75, upper_bound=1.0):
         self.viewer = None
         # high = np.array([1.0, 1.0, 1.0, 1.0, self.MAX_VEL_1, self.MAX_VEL_2])
         high = np.array([1.0, 1.0, self.MAX_VEL_1, self.MAX_VEL_2]) # added
@@ -95,7 +95,9 @@ class AcrobotSimulator_po(core.Env):
         self.continuous_time = continuous_time
         self.partially_observable = partially_observable
         self.include_extra = include_extra
-        
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+
 
     def __repr__(self):
         return "Acrobot_Simulator"
@@ -112,7 +114,7 @@ class AcrobotSimulator_po(core.Env):
         if self.partially_observable:
             self.state[1] = 0.0
             self.state[3] = 0.0
-        
+
         return self._get_ob(dt=0, action=1)
 
     def step(self, a):
@@ -155,12 +157,13 @@ class AcrobotSimulator_po(core.Env):
     def _get_ob(self, dt=0, action=1):
         if self.partially_observable:
             state = np.array([self.state[0], self.state[2]])
-        else: 
+        else:
             state = self.state
         if self.include_extra:
-            state = np.append(state, [self.t-dt, self.t, action])
+            # state = np.append(state, [self.t-dt, self.t, action])
+            state = np.append(state, [0, dt, action])
         return state
-            
+
 
     def _terminal(self, state=None):
         if state is None:
@@ -171,7 +174,7 @@ class AcrobotSimulator_po(core.Env):
         return bool(-cos(state[0]) - cos(state[1] + state[0]) > 1.)
 
     def is_terminal(self, state=None):
-        return self.n >= 500 or self._terminal(state=state)
+        return self.t >= 350 or self._terminal(state=state)
 
     def calc_reward(self, action=0, state=None, dt=1):
         if state is None:
@@ -182,7 +185,7 @@ class AcrobotSimulator_po(core.Env):
         return -cos(state[0]) - cos(state[1] + state[0])
 
     def get_time_gap(self, action=0, state=None):
-        return self.np_random.uniform(0.25, 4.0)
+        return self.np_random.uniform(self.lower_bound, self.upper_bound)
 
     def get_time_info(self):
         return 1, 5, 500, False  # min_t, max_t, max time length, is continuous
